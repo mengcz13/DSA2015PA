@@ -1,9 +1,10 @@
 #include <cstdio>
 
-#define MAX ((1<<24)+(1<<22)+(1<<21))
+#define MAX ((1<<24)+(1<<22)+(1<<21)+192000)
 #define MAXSTR (64+1)
+#define IOBUFFER 1<<8
 
-#define DEBUG
+//#define DEBUG
 
 struct TreeNode{
     char credit;
@@ -61,13 +62,13 @@ GameTree::~GameTree(){
 void GameTree::insert_string(char* seq){
     int p=0;
     TreeNode* par=root;
-    while (seq[p]>='0'){
+    while (seq[p]>47){
         if ((~seq[p])&1){
             if (par->rc!=NULL)
                 par=par->rc;
             else{
                 TreeNode* ch=allocate();
-                par->insert_child(ch,(~seq[p])&1);
+                par->insert_child(ch,1);
                 par=ch;
             }
         }
@@ -76,7 +77,7 @@ void GameTree::insert_string(char* seq){
                 par=par->lc;
             else{
                 TreeNode* ch=allocate();
-                par->insert_child(ch,(~seq[p])&1);
+                par->insert_child(ch,0);
                 par=ch;
             }
         }
@@ -107,7 +108,6 @@ void GameTree::update(TreeNode* latest){
         //这里的优化似乎有错……似乎某节点不需修改后仍需向上更新
         // if (to_be_changed==temp->parent->credit)
         //     break;
-        // else
         temp->parent->credit=to_be_changed;
         temp=temp->parent;
     }
@@ -121,8 +121,8 @@ TreeNode* GameTree::allocate(){
 }
 
 int main(){
-    setvbuf(stdin, new char[1 << 20], _IOFBF, 1 << 20);
-    setvbuf(stdout, new char[1 << 20], _IOFBF, 1 << 20);
+    //setvbuf(stdin, new char[IOBUFFER], _IOFBF, IOBUFFER);
+    //setvbuf(stdout, new char[IOBUFFER], _IOFBF, IOBUFFER);
     #ifdef DEBUG
     freopen("input.txt","r",stdin);
     freopen("output.txt","w",stdout);
