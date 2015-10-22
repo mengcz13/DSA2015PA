@@ -47,8 +47,8 @@ int IStack::get_max(){
 	return m;
 }
 //比较辅助栈栈顶元素和主栈内最大元素并决定插入哪个元素
-int output_one(IStack* s0, IStack* s1){
-	int m0=s0->get_max();
+int output_one(IStack* s0, IStack* s1, IStack* s2){
+	int m0=s2->top();
 	int mt1=-1;
 	if (!s1->empty())
 		mt1=s1->top();
@@ -57,9 +57,11 @@ int output_one(IStack* s0, IStack* s1){
 	}
 	else{
 		int t=s0->pop();
+        s2->pop();
 		while (t!=m0){
 			s1->push(t);
 			t=s0->pop();
+            s2->pop();
 		}
 		return t;
 	}
@@ -70,6 +72,7 @@ int main(){
 	setvbuf(stdout, new char[1 << 20], _IOFBF, 1 << 20);
 	IStack* s0=new IStack(MAX);
 	IStack* s1=new IStack(MAX);
+    IStack* s2=new IStack(MAX);
 	int* temps=new int[MAX];
 	int n=0, tempr=0;
 	scanf("%d",&n);
@@ -78,15 +81,25 @@ int main(){
 	}
 	for (int i=tempr-1;i>=0;--i){
 		s0->push(temps[i]);
+        if (s2->empty())
+            s2->push(temps[i]);
+        else{
+            int ttt=s2->top();
+            if (temps[i]<ttt)
+                s2->push(ttt);
+            else
+                s2->push(temps[i]);
+        }
 	}
 	while (!s0->empty()){
-		printf("%d ",output_one(s0,s1));
+		printf("%d ",output_one(s0,s1,s2));
 	}
 	while (!s1->empty()){
 		printf("%d ",s1->pop());
 	}
 	delete s0;
 	delete s1;
+    delete s2;
 	delete []temps;
 	return 0;
 }
