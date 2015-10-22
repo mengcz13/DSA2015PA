@@ -123,6 +123,7 @@ TreeNode* GameTree::allocate(){
 int main(){
     //setvbuf(stdin, new char[IOBUFFER], _IOFBF, IOBUFFER);
     //setvbuf(stdout, new char[IOBUFFER], _IOFBF, IOBUFFER);
+    //用fread?
     #ifdef DEBUG
     freopen("input.txt","r",stdin);
     freopen("output.txt","w",stdout);
