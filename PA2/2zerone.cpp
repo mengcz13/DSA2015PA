@@ -2,7 +2,7 @@
 
 #define MAX ((1<<24)+(1<<22)+(1<<21)+192000)
 #define MAXSTR (64+1)
-#define IOBUFFER 1<<8
+#define IOBUFFER 1<<10
 
 //#define DEBUG
 
@@ -13,7 +13,7 @@ struct TreeNode{
     TreeNode* lc;
     TreeNode* rc;
 
-    TreeNode():credit(0),depth(0),parent(NULL),lc(NULL),rc(NULL){}
+    TreeNode():credit(-1),depth(0),parent(NULL),lc(NULL),rc(NULL){}
 
     void insert_child(TreeNode* child, int flag){
         child->parent=this;
@@ -21,7 +21,7 @@ struct TreeNode{
             rc=child;
         else
             lc=child;
-        child->depth=this->depth+1;
+        child->depth=1-this->depth;
     }
 };
 
@@ -83,47 +83,48 @@ void GameTree::insert_string(char* seq){
         }
         p++;
     }
-    if (par->lc==NULL && par->rc==NULL){
+    if (par->credit==-1){
         if (par->depth & 1)
             par->credit=1;
+        else
+            par->credit=0;
         update(par);
     }
 }
 
 void GameTree::update(TreeNode* latest){
-    TreeNode* temp=latest;
-    while (temp!=root){
+    while (latest!=root){
         char to_be_changed=0;
-        if (temp->depth & 1){
-            char lcredit=(temp->parent->lc==NULL)?0:temp->parent->lc->credit;
-            char rcredit=(temp->parent->rc==NULL)?0:temp->parent->rc->credit;
+        if (latest->depth & 1){
+            char lcredit=(latest->parent->lc==NULL)?0:latest->parent->lc->credit;
+            char rcredit=(latest->parent->rc==NULL)?0:latest->parent->rc->credit;
             to_be_changed=(lcredit|rcredit);
         }
         else{
-            char lcredit=(temp->parent->lc==NULL)?1:temp->parent->lc->credit;
-            char rcredit=(temp->parent->rc==NULL)?1:temp->parent->rc->credit;
+            char lcredit=(latest->parent->lc==NULL)?1:latest->parent->lc->credit;
+            char rcredit=(latest->parent->rc==NULL)?1:latest->parent->rc->credit;
             to_be_changed=(lcredit&rcredit);
         }
 
-        //这里的优化似乎有错……似乎某节点不需修改后仍需向上更新
-        // if (to_be_changed==temp->parent->credit)
-        //     break;
-        temp->parent->credit=to_be_changed;
-        temp=temp->parent;
+        //若当前父节点之前已更新过且本次无需修改则退出
+        if (to_be_changed==latest->parent->credit)
+            break;
+        latest->parent->credit=to_be_changed;
+        latest=latest->parent;
     }
 }
 
 TreeNode* GameTree::allocate(){
-    if (tail<maxsize-1)
+    if (tail<maxsize)
         return (&buffer[tail++]);
     else
         return (new TreeNode());
 }
 
 int main(){
-    //setvbuf(stdin, new char[IOBUFFER], _IOFBF, IOBUFFER);
-    //setvbuf(stdout, new char[IOBUFFER], _IOFBF, IOBUFFER);
-    //用fread?
+    setvbuf(stdin, new char[IOBUFFER], _IOFBF, IOBUFFER);
+    setvbuf(stdout, new char[IOBUFFER], _IOFBF, IOBUFFER);
+
     #ifdef DEBUG
     freopen("input.txt","r",stdin);
     freopen("output.txt","w",stdout);
@@ -131,7 +132,7 @@ int main(){
     
     int n=0;
     scanf("%d",&n);
-    GameTree* gametree=new GameTree((n*64)<<1);
+    GameTree* gametree=new GameTree((40000000));
     getchar();
     char* str=new char[MAXSTR];
     char* test;
@@ -157,8 +158,8 @@ int main(){
             else{
                 printf("%d\nEve %d ",r-1,r);
             }
+            lastone=current;
         }
-        lastone=current;
         r++;
     }
     printf("%d",n);
