@@ -1,27 +1,49 @@
 #include <cstdio>
 
-#define MAX ((1<<24)+(1<<22)+(1<<21)+192000)
+#define MAX 64000000
 #define MAXSTR (64+1)
-#define IOBUFFER 1<<10
+#define IOBUFFER 1<<20
 
 //#define DEBUG
 
+//为了节省空间采用位运算+手工模拟地址...0~25位存储地址，29位存储胜负，30位存储深度奇偶性，31位存储是否初始化（不过好像没用到）
+//由于总结点不超过64*10^6<2^26所以这样是可以覆盖所有节点的
+#define ADDR(x) (x & ((1<<26)-1))
+#define CREDIT(x) ((x>>29) & 1)
+#define DEPTH(x) ((x>>30) & 1)
+#define INIT(x) ((x>>31) & 1)
 struct TreeNode{
-    char credit;
-    char depth;
-    TreeNode* parent;
-    TreeNode* lc;
-    TreeNode* rc;
+    int parent_addr;
+    int lc_addr;
+    int rc_addr;
+    TreeNode():parent_addr(0),lc_addr(0),rc_addr(0){}
 
-    TreeNode():credit(-1),depth(0),parent(NULL),lc(NULL),rc(NULL){}
-
-    void insert_child(TreeNode* child, int flag){
-        child->parent=this;
-        if (flag)
-            rc=child;
+    int parent(){return ADDR(parent_addr);}
+    int lc(){return ADDR(lc_addr);}
+    int rc(){return ADDR(rc_addr);}
+    int credit(){return CREDIT(parent_addr);}
+    int depth(){return DEPTH(parent_addr);}
+    int if_init(){return INIT(parent_addr);}
+    void set_depth(int dep){
+        if (dep)
+            parent_addr|=(1<<30);
         else
-            lc=child;
-        child->depth=1-this->depth;
+            parent_addr&=(~(1<<30));
+    }
+    void set_credit(int credit){
+        if (credit)
+            parent_addr|=(1<<29);
+        else
+            parent_addr&=(~(1<<29));
+    }
+    void set_parent(int paddr){
+        parent_addr|=paddr;
+    }
+    void set_rc(int rcaddr){
+        rc_addr=rcaddr;
+    }
+    void set_lc(int lcaddr){
+        lc_addr=lcaddr;
     }
 };
 
@@ -29,16 +51,15 @@ class GameTree{
 private:
     TreeNode* buffer;
     int tail;
-    TreeNode* root;
     int maxsize;
 
 public:
     GameTree(int size);
     ~GameTree();
     void insert_string(char*);//插入新串
-    void update(TreeNode*);//从插入点向上更新胜负值
-    TreeNode* allocate();//从buffer分配一单位节点空间
-    char if_adam_win(){return root->credit;}
+    void update(int);//从插入点向上更新胜负值
+    int allocate();//从buffer分配一单位节点空间
+    int if_adam_win(){return buffer[0].credit();}
 };
 
 GameTree::GameTree(int size){
@@ -50,75 +71,77 @@ GameTree::GameTree(int size){
         buffer=new TreeNode[MAX];
         maxsize=MAX;
     }
-    tail=0;
-    root=allocate();
+    tail=1;
 }
 
 GameTree::~GameTree(){
-    root=NULL;
     delete []buffer;
 }
 
 void GameTree::insert_string(char* seq){
     int p=0;
-    TreeNode* par=root;
+    int par=0;
     while (seq[p]>47){
+        int prc=buffer[par].rc();
+        int plc=buffer[par].lc();
         if ((~seq[p])&1){
-            if (par->rc!=NULL)
-                par=par->rc;
+            if (prc!=0)
+                par=prc;
             else{
-                TreeNode* ch=allocate();
-                par->insert_child(ch,1);
+                int ch=allocate();
+                buffer[par].set_rc(ch);
+                buffer[ch].set_parent(par);
+                buffer[ch].set_depth(1-buffer[par].depth());
                 par=ch;
             }
         }
         else{
-            if (par->lc!=NULL)
-                par=par->lc;
+            if (plc!=0)
+                par=plc;
             else{
-                TreeNode* ch=allocate();
-                par->insert_child(ch,0);
+                int ch=allocate();
+                //par->insert_child(ch,0);
+                buffer[par].set_lc(ch);
+                buffer[ch].set_parent(par);
+                buffer[ch].set_depth(1-buffer[par].depth());
                 par=ch;
             }
         }
         p++;
     }
-    if (par->credit==-1){
-        if (par->depth & 1)
-            par->credit=1;
+    if (buffer[par].lc()==0 && buffer[par].rc()==0){
+        if (buffer[par].depth())
+            buffer[par].set_credit(1);
         else
-            par->credit=0;
+            buffer[par].set_credit(0);
         update(par);
     }
 }
 
-void GameTree::update(TreeNode* latest){
-    while (latest!=root){
-        char to_be_changed=0;
-        if (latest->depth & 1){
-            char lcredit=(latest->parent->lc==NULL)?0:latest->parent->lc->credit;
-            char rcredit=(latest->parent->rc==NULL)?0:latest->parent->rc->credit;
+//自底向上更新胜负情况
+void GameTree::update(int latest){
+    while (latest!=0){
+        int to_be_changed=0;
+        if (buffer[latest].depth()){
+            int lcredit=(buffer[buffer[latest].parent()].lc()==0)?0:buffer[buffer[buffer[latest].parent()].lc()].credit();
+            int rcredit=(buffer[buffer[latest].parent()].rc()==0)?0:buffer[buffer[buffer[latest].parent()].rc()].credit();
             to_be_changed=(lcredit|rcredit);
         }
         else{
-            char lcredit=(latest->parent->lc==NULL)?1:latest->parent->lc->credit;
-            char rcredit=(latest->parent->rc==NULL)?1:latest->parent->rc->credit;
+            int lcredit=(buffer[buffer[latest].parent()].lc()==0)?1:buffer[buffer[buffer[latest].parent()].lc()].credit();
+            int rcredit=(buffer[buffer[latest].parent()].rc()==0)?1:buffer[buffer[buffer[latest].parent()].rc()].credit();
             to_be_changed=(lcredit&rcredit);
         }
-
-        //若当前父节点之前已更新过且本次无需修改则退出
-        if (to_be_changed==latest->parent->credit)
-            break;
-        latest->parent->credit=to_be_changed;
-        latest=latest->parent;
+        buffer[buffer[latest].parent()].set_credit(to_be_changed);
+        latest=buffer[latest].parent();
     }
 }
 
-TreeNode* GameTree::allocate(){
+int GameTree::allocate(){
     if (tail<maxsize)
-        return (&buffer[tail++]);
+        return (tail++);
     else
-        return (new TreeNode());
+        return (-1);
 }
 
 int main(){
@@ -132,7 +155,7 @@ int main(){
     
     int n=0;
     scanf("%d",&n);
-    GameTree* gametree=new GameTree((40000000));
+    GameTree* gametree=new GameTree((64*n));
     getchar();
     char* str=new char[MAXSTR];
     char* test;
@@ -163,11 +186,6 @@ int main(){
         r++;
     }
     printf("%d",n);
-
-    #ifdef DEBUG
-    TreeNode tnd;
-    printf("\n%u",sizeof(NULL));
-    #endif
 
     delete gametree;
     delete str;
