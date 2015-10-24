@@ -2,21 +2,13 @@
 #define IOBUFFER 1<<20
 
 struct TreeNode{
-    int a;
-    int b;
-    int c;
-    //int d;
+    TreeNode* lc;
+    TreeNode* rc;
 };
 
 int main(){
     setvbuf(stdin, new char[IOBUFFER], _IOFBF, IOBUFFER);
     setvbuf(stdout, new char[IOBUFFER], _IOFBF, IOBUFFER);
-    TreeNode* tna=new TreeNode[64000000];
-    int n=0;
-    scanf("%d",&n);
-    getchar();
-    char* str=new char[65];
-    for (int i=0;i<n;++i)
-        gets(str);
+    TreeNode* tna=new TreeNode[30*250000];
 	return 0;
 }
