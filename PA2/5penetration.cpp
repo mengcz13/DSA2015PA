@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define DEBUG
+//#define DEBUG
 #define MAX (100000)
 
 struct Target {
@@ -77,7 +77,7 @@ HistorySegmentTree::HistorySegmentTree(int rootn, int sizen, int sp) {
     node = new Segment[store_size];
     root_tail = 1;
     node_tail = 0;
-    root[0].left = 1;
+    root[0].left = 0;
     root[0].right = shootpoint;
 }
 
@@ -87,7 +87,10 @@ HistorySegmentTree::~HistorySegmentTree() {
 }
 
 Segment* HistorySegmentTree::allocate() {
-    return (&node[node_tail++]);
+    if (node_tail < store_size)
+        return (&node[node_tail++]);
+    else
+        return (new Segment());
 }
 
 void HistorySegmentTree::insert(Target* target) {
@@ -142,6 +145,8 @@ void HistorySegmentTree::copy_his_rc(Segment* curr_seg, Segment* hist_seg) {
 }
 
 void HistorySegmentTree::insert_segment(Segment* curr_seg, int left, int right, int anti, Segment* hist_seg) {
+    if (left > right)
+        return;
     if (curr_seg->left == left && curr_seg->right == right) {
         //树节点与待插入区间恰好重合，根据上一历史版本确定能否直接返回。上一版本若此点为空或者无孩子即可返回。
         if (hist_seg == NULL || hist_seg->lc == NULL && hist_seg->rc == NULL) {
@@ -149,7 +154,7 @@ void HistorySegmentTree::insert_segment(Segment* curr_seg, int left, int right, 
             curr_seg->antisum += anti;
 
             #ifdef DEBUG
-            printf("left:%d\tright:%d\ttargetnum:%d\tantisum:%d\t\n", left, right, curr_seg->targetnum, curr_seg->antisum);
+            printf("left:%d\tright:%d\ttargetnum:%d\tantisum:%lld\tsize:%d\n", left, right, curr_seg->targetnum, curr_seg->antisum, node_tail);
             #endif
 
             return;
@@ -166,8 +171,8 @@ void HistorySegmentTree::insert_segment(Segment* curr_seg, int left, int right, 
         int seg_mid = ((curr_seg->left + curr_seg->right) >> 1);
         if (right <= seg_mid) {
             //向左深入，右分支与历史版本相同
-            if (hist_seg == NULL || hist_seg->rc == NULL) {
-                copy_his_rc(curr_seg, hist_seg);
+            if (hist_seg == NULL) {
+                curr_seg->rc = NULL;
             }
             else
                 curr_seg->rc = hist_seg->rc;
@@ -177,8 +182,8 @@ void HistorySegmentTree::insert_segment(Segment* curr_seg, int left, int right, 
         }
         else if (left > seg_mid) {
             //向右深入，左分支与历史版本相同
-            if (hist_seg == NULL || hist_seg->lc == NULL) {
-                copy_his_lc(curr_seg, hist_seg);
+            if (hist_seg == NULL) {
+                curr_seg->lc = NULL;
             }
             else
                 curr_seg->lc = hist_seg->lc;
@@ -198,24 +203,40 @@ void HistorySegmentTree::insert_segment(Segment* curr_seg, int left, int right, 
 
 int HistorySegmentTree::get_targetsum(int version, int position) {
     Segment* p = &root[version];
-    while (p->lc != NULL || p->rc != NULL) {
+    while (1) {
         int mid = (p->left + p->right) >> 1;
-        if (position > mid)
-            p = p->rc;
-        else
-            p = p->lc;
+        if (position > mid){
+            if (p->rc != NULL)
+                p = p->rc;
+            else
+                break;
+        }
+        else {
+            if (p->lc != NULL)
+                p = p->lc;
+            else
+                break;
+        }
     }
     return (p->targetnum);
 }
 
 long long HistorySegmentTree::get_antisum_in_his(int version, int position) {
     Segment* p = &root[version];
-    while (p->lc != NULL || p->rc != NULL) {
+    while (1) {
         int mid = (p->left + p->right) >> 1;
-        if (position > mid)
-            p = p->rc;
-        else
-            p = p->lc;
+        if (position > mid){
+            if (p->rc != NULL)
+                p = p->rc;
+            else
+                break;
+        }
+        else {
+            if (p->lc != NULL)
+                p = p->lc;
+            else
+                break;
+        }
     }
     return (p->antisum);
 }
@@ -240,8 +261,8 @@ int main() {
     }
     quicksort(tarray, 0, m);
 
-    HistorySegmentTree* hst = new HistorySegmentTree(m+1, 10*m, n);
-    for (int i = 0; i < n; ++i) {
+    HistorySegmentTree* hst = new HistorySegmentTree(m + 1, 100 * m, n + 16);
+    for (int i = 0; i < m; ++i) {
         hst->insert(tarray[i]);
     }
 
@@ -251,9 +272,11 @@ int main() {
         scanf("%d%d%d%d", &x, &a, &b, &c);
         int k = (a * pre + b) % c + 1;
         pre = hst->get_antisum(x, k);
-        printf("%d\n", pre);
+        printf("%lld\n", pre);
     }
 
     delete hst;
+    delete []tarray;
+    delete []tdata;
     return 0;
 }
