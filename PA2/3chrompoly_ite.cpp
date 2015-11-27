@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <string.h>
-#define MAXN 40
+#define MAXN 32
 //#define DEBUG
+
+#ifdef DEBUG
+    int ite_time = 0;
+#endif
 
 class BinoCoefGenerator {
 private:
@@ -33,6 +37,8 @@ long long BinoCoefGenerator::nchoosek(int n, int k) {
         return binocoef[n * maxn + k];
     }
 }
+
+BinoCoefGenerator bcgene(MAXN);
 
 struct Poly {
     long long series[MAXN];
@@ -69,14 +75,24 @@ struct Poly {
             printf("%lld\n", series[i]);
         }
     }
+    void generate_k_1(int rank) { //generate(k-1)^n
+        memset(series, 0, sizeof(long long) * MAXN);
+        high = rank;
+        for (int i = 0; i <= high; ++i) {
+            series[i] = bcgene.nchoosek(high, i);
+            if ((high - i) & 1)
+                series[i] = -series[i];
+        }
+    }
 };
 
 class Graph {
 private:
-    int* edge;//edge[i][i] == 0 : point exist; == -1 : point not exist
+    int* edge;
     int vertex_num;
     Poly poly;
     bool single;
+    int deg[MAXN];
 
 public:
     Graph() : edge(NULL), vertex_num(0), single(false) {}
@@ -84,27 +100,35 @@ public:
         edge = data_area;
         vertex_num = vnum;
         poly.high = vertex_num;
+        memset(deg, 0, sizeof(int) * MAXN);
     }
     void Graph_copy(int* data_area, Graph& src) {
         vertex_num = src.vertex_num;
         poly.high = src.poly.high;
         edge = data_area;
         memcpy(edge, src.edge, vertex_num * vertex_num * sizeof(int));
+        memcpy(deg, src.deg, MAXN * sizeof(int));
     }
 
     //Basic Manipulations
     void add_edge(int v1, int v2);
     void subtra_edge(int v1, int v2);
     void contra_edge(int v1, int v2);
+    int maxdeg() {
+
+    }
     void first_edge(int& v1, int& v2) {
+        int weight = ~(1 << 31);
         for (int i = 0; i < vertex_num; ++i)
             for (int j = i + 1; j < vertex_num; ++j) {
                 if (edge[i * vertex_num + j] == 1) {
-                    v1 = i;
-                    v2 = j;
-                    break;
+                    if (deg[i] + deg[j] < weight) {
+                        weight = deg[i] + deg[j];
+                        v1 = i;
+                        v2 = j;
+                    }
                 }
-            }
+            } 
         #ifdef DEBUG
             printf("firstedge: %d %d\n", v1, v2);
         #endif
@@ -113,24 +137,56 @@ public:
     int one_degree_vnum() {
         int odv = 0;
         for (int i = 0; i < vertex_num; ++i) {
-            if (edge[i * vertex_num + i] == 0) {
-                int degree = 0, lastv2 = 0;
+            int lastv2 = 0;
+            if (deg[i] == 1) {
                 for (int j = 0; j < vertex_num; ++j) {
                     if (edge[i * vertex_num + j] == 1) {
-                        ++degree;
                         lastv2 = j;
                     }
-                }
-                if (degree == 1) {
-                    ++odv;
-                    contra_edge(lastv2, i);
-                    #ifdef DEBUG
-                    printf("odv=%d, %d, %d\n", odv, lastv2, i);
-                    #endif
-                }
+                }   
+                ++odv;
+                contra_edge(lastv2, i);
+                #ifdef DEBUG
+                printf("odv=%d, %d, %d\n", odv, lastv2, i);
+                #endif
             }
         }
         return odv;
+    }
+    //find 2-d points with neighbouring edges
+    int two_degree_vnum() {
+        int tdv = 0;
+        for (int i = 0; i < vertex_num; ++i) {
+                int u[2];
+                int p = 0;
+                if (deg[i] == 2) {
+                    for (int j = 0; j < vertex_num; ++j) {
+                        if (edge[i * vertex_num + j] == 1) {
+                            u[p++] = j;
+                        }
+                    }
+                    if (edge[u[0] * vertex_num + u[1]] == 1) {
+                        tdv++;
+                        contra_edge(u[0], i);
+                    }
+                }
+        }
+        return tdv;
+    }
+    int nm1_degree_vnum() {
+        for (int i = 0; i < vertex_num; ++i) {
+            if (deg[i] == poly.high - 1) {
+                for (int j = 0; j < vertex_num; ++j) {
+                    if (edge[i * vertex_num + j] == 1) {
+                        subtra_edge(i, j);
+                    }
+                } 
+                edge[i * vertex_num + i] = -1;
+                --poly.high;
+                return 1;
+            }
+        }
+        return 0;
     }
     void printpoly() {
         poly.printpoly();
@@ -138,19 +194,29 @@ public:
     //Judging Functions
     bool if_empty();//Test empty graph
     bool if_loop();//Test if loop
+    bool if_full();//Test if full
+    bool if_tree();//Test if tree
     //...
-    bool if_trivial() {return (if_empty() || if_loop());}
+    bool if_trivial() {return (if_tree() || if_empty() || if_loop() || if_full());}
 
     void solve_poly();
-    void bfs(int sp, int color, bool* record);
+    void dfs(int sp, int color, bool* record);
 
 };
 
 void Graph::add_edge(int v1, int v2) {
+    if (edge[v1 * vertex_num + v2] == 0) {
+        deg[v1]++;
+        deg[v2]++;
+    }
     edge[v1 * vertex_num + v2] = edge[v2 * vertex_num + v1] = 1;
 }
 
 void Graph::subtra_edge(int v1, int v2) {
+    if (edge[v1 * vertex_num + v2] == 1) {
+        deg[v1]--;
+        deg[v2]--;
+    }
     edge[v1 * vertex_num + v2] = edge[v2 * vertex_num + v1] = 0;
 }
 
@@ -162,7 +228,6 @@ void Graph::contra_edge(int v1, int v2) {
             add_edge(v1, i);
         }
     }
-    edge[v2 * vertex_num + v2] = -1;
     --poly.high;
 }
 
@@ -178,28 +243,13 @@ bool Graph::if_empty() {
 
 bool Graph::if_loop() {
     for (int i = 0; i < vertex_num; ++i) {
-        if (edge[i * vertex_num + i] == 0) {
-            int degree = 0;
-            for (int j = 0; j < vertex_num; ++j) {
-                if (edge[i * vertex_num + j] == 1)
-                    ++degree;
-            }
-            if (degree != 2)
-                return false;
-        }
+        if (deg[i] > 0 && deg[i] != 2)
+            return false;
     }
-    //可能有多个圈！！！！！
     int rp = poly.high;
-    poly.series[0] = 1;
-    poly.high = 0;
+    poly.generate_k_1(rp);
     Poly poly2;
-    poly2.high = 1;
-    poly2.series[0] = -1;
-    poly2.series[1] = 1;
-
-    for (int i = 0; i < rp; ++i) {
-        poly.multiple(poly2);
-    }
+    poly2.generate_k_1(1);
     if (rp & 1)
         poly.sub(poly2);
     else
@@ -207,19 +257,58 @@ bool Graph::if_loop() {
     return true;
 }
 
-void Graph::bfs(int sp, int color, bool* record) {
+bool Graph::if_full() {
+    for (int i = 0; i < vertex_num; ++i) {
+        if (deg[i] > 0 && deg[i] != poly.high - 1)
+            return false;
+    }
+    int rp = poly.high;
+    poly.high = 0;
+    poly.series[0] = 1;
+    Poly poly2;
+    poly2.generate_k_1(1);
+    poly2.series[0] = 0;
+    for (int i = 0; i >= - rp + 1; --i) {
+        poly2.series[0] = i;
+        poly.multiple(poly2);
+    }
+    return true;
+}
+
+bool Graph::if_tree() {
+    int sum = 0;
+    for (int i = 0; i < vertex_num; ++i) {
+        if (deg[i] > 0) {
+            sum += deg[i];
+        }
+    }
+    sum /= 2;
+    if (sum != poly.high - 1)
+        return false;
+    poly.generate_k_1(poly.high - 1);
+    Poly poly2;
+    poly2.generate_k_1(1);
+    poly2.series[0] = 0;
+    poly.multiple(poly2);
+    return true;
+}
+
+void Graph::dfs(int sp, int color, bool* record) {
     record[sp] = true;
     for (int j = 0; j < vertex_num; ++j) {
         if (edge[sp * vertex_num + j] > 0) {
             edge[sp * vertex_num + j] = color;
             if (!record[j]) {
-                bfs(j, color, record);
+                dfs(j, color, record);
             }
         }
     }
 }
 
 void Graph::solve_poly() {
+    #ifdef DEBUG
+    ++ite_time;
+    #endif
     if (single) {
         if (if_trivial()) {
             #ifdef DEBUG
@@ -230,7 +319,6 @@ void Graph::solve_poly() {
         }
         else {
             int odv = one_degree_vnum();
-            int data_area[MAXN * MAXN];
             #ifdef DEBUG
             printf("odv: %d\n", odv);
             #endif
@@ -238,34 +326,67 @@ void Graph::solve_poly() {
                 solve_poly();
                 //multi (k - 1) ^ odv
                 Poly poly2;
-                poly2.series[0] = -1;
-                poly2.series[1] = 1;
-                poly2.high = 1;
-                for (int i = 0; i < odv; ++i) {
-                    poly.multiple(poly2);
-                }
+                poly2.generate_k_1(odv);
+                poly.multiple(poly2);
             }
 
             else {
-                int v1 = 0, v2 = 0;
-                first_edge(v1, v2);
-                #ifdef DEBUG
-                printf("%d %d\n", v1, v2);
-                #endif
+                int tdv = two_degree_vnum();
+                if (tdv > 0) {
+                    solve_poly();
+                    //multi (k - 2) ^ tdv
+                    Poly poly2;
+                    poly2.high = 1;
+                    poly2.series[1] = 1;
+                    poly2.series[0] = -2;
+                    for (int i = 0; i < tdv; ++i)
+                        poly.multiple(poly2);
+                }
+                else {
+                    int ndv = nm1_degree_vnum();
+                    if (ndv) {
+                        solve_poly();
+                        Poly poly2;
+                        Poly poly3;
+                        Poly poly4;
+                        poly2.high = 0;
+                        poly2.series[0] = poly.series[0];
+                        poly4.high = 0;
+                        for (int i = 1; i <= poly.high; ++i) {
+                            poly4.series[0] = poly.series[i];
+                            poly3.generate_k_1(i);
+                            poly3.multiple(poly4);
+                            poly2.add(poly3);
+                        }
+                        poly.high = 1;
+                        memset(poly.series, 0, sizeof(long long) * MAXN);
+                        poly.series[0] = 0;
+                        poly.series[1] = 1;
+                        poly.multiple(poly2);
+                    }
+                    else {
+                        int data_area[MAXN * MAXN];
+                        int v1 = 0, v2 = 0;
+                        first_edge(v1, v2);
+                        #ifdef DEBUG
+                        printf("%d %d\n", v1, v2);
+                        #endif
 
-                Graph subgraph;
-                subgraph.Graph_copy(data_area, *this);
-                subgraph.subtra_edge(v1, v2);
-                subgraph.solve_poly();
+                        Graph subgraph;
+                        subgraph.Graph_copy(data_area, *this);
+                        subgraph.subtra_edge(v1, v2);
+                        subgraph.solve_poly();
 
-                Graph contragraph;
-                contragraph.Graph_copy(data_area, *this);
-                contragraph.contra_edge(v1, v2);
-                contragraph.single = true;
-                contragraph.solve_poly();
+                        Graph contragraph;
+                        contragraph.Graph_copy(data_area, *this);
+                        contragraph.contra_edge(v1, v2);
+                        contragraph.single = true;
+                        contragraph.solve_poly();
 
-                poly.add(subgraph.poly);
-                poly.sub(contragraph.poly);
+                        poly.add(subgraph.poly);
+                        poly.sub(contragraph.poly);
+                    }
+                }
             }
             #ifdef DEBUG
             printpoly();
@@ -276,7 +397,7 @@ void Graph::solve_poly() {
     else {
         bool visited[MAXN];
         for (int i = 0; i < vertex_num; ++i) {
-            if (edge[i * vertex_num + i] == 0)
+            if (deg[i] > 0)
                 visited[i] = false;
             else
                 visited[i] = true;
@@ -284,7 +405,7 @@ void Graph::solve_poly() {
         int color = 1;
         for (int i = 0; i < vertex_num; ++i) {
             if (!visited[i]) {
-                bfs(i, color++, visited);
+                dfs(i, color++, visited);
             }
         }
         #ifdef DEBUG
@@ -302,20 +423,16 @@ void Graph::solve_poly() {
                 int data_area[MAXN * MAXN];
                 chgraph.Graph_copy(data_area, *this);
                 memset(data_area, 0, sizeof(int) * MAXN * MAXN);
-                for (int i = 0; i < vertex_num; ++i) {
-                    data_area[i * vertex_num + i] = -1;
-                }
+                memset(chgraph.deg, 0, sizeof(int) * MAXN);
                 for (int i = 0; i < vertex_num; ++i)
                     for (int j = 0; j < vertex_num; ++j) {
                         if (edge[i * vertex_num + j] == curr_color) {
                             chgraph.add_edge(i, j);
-                            data_area[i * vertex_num + i] = 0;
-                            data_area[j * vertex_num + j] = 0;
                         }
                     }
                 chgraph.poly.high = 0;
                 for (int i = 0; i < vertex_num; ++i) {
-                    if (data_area[i * vertex_num + i] == 0)
+                    if (chgraph.deg[i] > 0)
                         ++chgraph.poly.high;
                 }
                 chgraph.single = true;
@@ -327,6 +444,8 @@ void Graph::solve_poly() {
 }
 
 int main() {
+    setvbuf(stdin, new char[1 << 20], _IOFBF, 1 << 20);
+    setvbuf(stdout, new char[1 << 20], _IOFBF, 1 << 20);
     #ifdef DEBUG
     freopen("input.txt","r",stdin);
     #endif
@@ -343,5 +462,8 @@ int main() {
     }
     graph.solve_poly();
     graph.printpoly();
+    #ifdef DEBUG
+    printf("ITETIME: %d\n", ite_time);
+    #endif
     return 0;
 }
