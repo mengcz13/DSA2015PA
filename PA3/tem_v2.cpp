@@ -242,10 +242,10 @@ void RangeTree::build() {
                 }
             }
             //前缀和
-            prefix_ysum[xtree[i].start] = yarranged_pool[xtree[i].start]->tem;
-            for (int j = xtree[i].start + 1; j < xtree[i].end; ++j) {
-                prefix_ysum[j] = prefix_ysum[j - 1] + yarranged_pool[j]->tem;
-            }
+            // prefix_ysum[xtree[i].start] = yarranged_pool[xtree[i].start]->tem;
+            // for (int j = xtree[i].start + 1; j < xtree[i].end; ++j) {
+            //     prefix_ysum[j] = prefix_ysum[j - 1] + yarranged_pool[j]->tem;
+            // }
         }
     }
 }
@@ -270,10 +270,15 @@ long long RangeTree::query(int x1, int x2, int y1, int y2, int rank, int& psum) 
     }
     if (xtree[rank].left == x1 && xtree[rank].right == x2) {//匹配时根据y查找前缀和
         psum = y2 - y1 + 1;
-        if (y1 == xtree[rank].start)
-            return prefix_ysum[y2];
-        else
-            return (prefix_ysum[y2] - prefix_ysum[y1 - 1]);
+        // if (y1 == xtree[rank].start)
+        //     return prefix_ysum[y2];
+        // else
+        //     return (prefix_ysum[y2] - prefix_ysum[y1 - 1]);
+        long long temsum = 0;
+        for (int ri = y1; ri <= y2; ++ri) {
+            temsum += yarranged_pool[ri]->tem;
+        }
+        return temsum;
     }
     else {
         int mid = (xtree[rank].left + xtree[rank].right) >> 1;
